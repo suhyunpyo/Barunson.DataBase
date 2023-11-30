@@ -1,0 +1,25 @@
+IF OBJECT_ID (N'dbo.SP_DELETE_GREETING_CATEGORY', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_DELETE_GREETING_CATEGORY
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+
+-- =============================================
+-- Author:		DHLIM   
+-- Description:	인사말 카테고리 삭제
+-- =============================================
+
+CREATE PROCEDURE [dbo].[SP_DELETE_GREETING_CATEGORY]
+    @CATEGORY_INDEX as int
+AS
+BEGIN
+
+    DELETE FROM CC_GREETING_CATEGORY
+     WHERE CATEGORY_INDEX = @CATEGORY_INDEX
+    ;
+
+END
+GO

@@ -1,0 +1,22 @@
+IF OBJECT_ID (N'dbo.ufn_RandBetween', N'FN') IS NOT NULL OR 
+	OBJECT_ID (N'dbo.ufn_RandBetween', N'FS') IS NOT NULL OR 
+	OBJECT_ID (N'dbo.ufn_RandBetween', N'FT') IS NOT NULL OR 
+	OBJECT_ID (N'dbo.ufn_RandBetween', N'IF') IS NOT NULL OR 
+	OBJECT_ID (N'dbo.ufn_RandBetween', N'TF') IS NOT NULL 
+BEGIN
+    DROP FUNCTION dbo.ufn_RandBetween
+END
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE FUNCTION [dbo].[ufn_RandBetween](@BOTTOM INT, @TOP INT)
+RETURNS INT
+AS
+	BEGIN
+		RETURN (SELECT CAST(ROUND((@TOP-@BOTTOM)* RANDOMNUMBER + @BOTTOM,0) AS INTEGER) 
+        FROM View_RandomNumber)
+	END
+GO

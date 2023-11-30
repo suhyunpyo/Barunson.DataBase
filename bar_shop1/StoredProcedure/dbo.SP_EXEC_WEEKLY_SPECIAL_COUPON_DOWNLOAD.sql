@@ -1,0 +1,93 @@
+IF OBJECT_ID (N'dbo.SP_EXEC_WEEKLY_SPECIAL_COUPON_DOWNLOAD', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_EXEC_WEEKLY_SPECIAL_COUPON_DOWNLOAD
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- =============================================
+-- Author:		<Author,,Name>
+-- Create date: <Create Date,,>
+-- Description:	<Description,,>
+-- =============================================
+
+/*
+
+346273
+
+EXEC SP_EXEC_WEEKLY_SPECIAL_COUPON_DOWNLOAD 346273, 's4guest'
+
+*/
+
+CREATE PROCEDURE [dbo].[SP_EXEC_WEEKLY_SPECIAL_COUPON_DOWNLOAD]
+    @SEQ AS INT
+,   @UID AS VARCHAR(50)
+AS
+BEGIN
+    
+    SET NOCOUNT ON
+
+    DECLARE @MSG AS NVARCHAR(4000)
+
+    IF EXISTS   (
+                    SELECT  * 
+                    FROM    S4_COUPON SC 
+                    JOIN    S4_COUPON_WEEKLY_SPECIAL SCWS ON SC.SEQ = SCWS.COUPON_SEQ 
+                    WHERE   SC.SEQ = @SEQ 
+                    AND     SCWS.VIRTUAL_DOWNLOAD_QTY + 1 <= SCWS.LIMIT_DOWNLOAD_QTY
+                    AND     CONVERT(VARCHAR(8), SCWS.DOWNLOAD_START_DATE, 112) <= CONVERT(VARCHAR(8), GETDATE(), 112)
+                    AND     CONVERT(VARCHAR(8), SCWS.DOWNLOAD_END_DATE, 112) >= CONVERT(VARCHAR(8), GETDATE(), 112)
+                    AND     SC.ISYN = 'Y'
+                )
+        BEGIN
+            
+            IF NOT EXISTS   (
+                            SELECT  * 
+                            FROM    S4_MYCOUPON SMC
+                            JOIN    S4_COUPON SC ON SMC.COUPON_CODE = SC.COUPON_CODE
+                            WHERE   SMC.UID = @UID
+                            AND     SC.SEQ = @SEQ
+                            AND     SC.COMPANY_SEQ = SMC.COMPANY_SEQ
+                        )
+                BEGIN
+
+                    UPDATE  S4_COUPON_WEEKLY_SPECIAL
+                    SET     VIRTUAL_DOWNLOAD_QTY = VIRTUAL_DOWNLOAD_QTY + 1
+                        ,   REAL_DOWNLOAD_QTY = REAL_DOWNLOAD_QTY + 1
+                    WHERE   COUPON_SEQ = @SEQ
+
+                    INSERT INTO S4_MYCOUPON (COUPON_CODE, UID, COMPANY_SEQ, ISMYYN, END_DATE)
+                    SELECT  COUPON_CODE
+                        ,   @UID
+                        ,   COMPANY_SEQ
+                        ,   'Y'
+                        ,   END_DATE
+                    FROM    S4_COUPON
+                    WHERE   SEQ = @SEQ
+
+                    SET @MSG = '발급되었습니다'
+
+                END
+
+            ELSE
+                BEGIN
+
+                    SET @MSG = '이미 발급된 쿠폰입니다'
+
+                END
+
+        END
+
+    ELSE
+        BEGIN
+            
+            SET @MSG = '만료되었습니다'
+
+        END
+
+
+
+    SELECT @MSG AS MSG
+
+END
+GO

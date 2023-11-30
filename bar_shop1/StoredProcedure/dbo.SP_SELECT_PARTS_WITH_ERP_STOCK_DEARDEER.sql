@@ -1,0 +1,132 @@
+IF OBJECT_ID (N'dbo.SP_SELECT_PARTS_WITH_ERP_STOCK_DEARDEER', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_SELECT_PARTS_WITH_ERP_STOCK_DEARDEER
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+
+/*
+
+EXEC SP_SELECT_CARD_PART 'B01','', 50, 1, 'REG_DATE', 'DESC'
+EXEC SP_SELECT_PARTS_WITH_ERP_STOCK 'B01','', 200, 1, 'REG_DATE', 'DESC', '정상판매|단종예정|발주대기|폐기대상|폐기|공백', '', ''
+EXEC SP_SELECT_PARTS_WITH_ERP_STOCK 'B01','', 200, 1, 'REG_DATE', 'DESC', '폐기대상|폐기', '', ''
+EXEC SP_SELECT_PARTS_WITH_ERP_STOCK 'B01','', 100, 1, 'REG_DATE', 'DESC', '', '', ''
+*/
+
+CREATE PROCEDURE [dbo].[SP_SELECT_PARTS_WITH_ERP_STOCK_DEARDEER]
+		@P_CARD_DIV AS VARCHAR(50)
+	,	@P_CARD_CODE_OR_CARD_NAME AS VARCHAR(50)
+	,	@P_PAGE_SIZE AS INT
+	,	@P_PAGE_NUMBER AS INT
+	,	@P_ORDER_BY_NAME AS VARCHAR(50)
+	,	@P_ORDER_BY_TYPE AS VARCHAR(10)
+--    ,	@P_PRODUCTION_STATUS_NAME AS VARCHAR(200)
+--	,	@P_SALES_TYPE AS VARCHAR(10)
+
+
+AS
+BEGIN
+
+	SET NOCOUNT ON
+	
+    DECLARE @T_PRODUCTION_STATUS_NAME TABLE ( PRODUCTION_STATUS_NAME VARCHAR(20) )
+	DECLARE @T_SITE_SEARCH_VALUE TABLE ( COMPANY_SEQ INT )
+
+	DECLARE @T_PRODUCTION_STATUS_NAME_COUNT AS INT
+	DECLARE @T_SITE_SEARCH_VALUE_COUNT AS INT
+
+
+
+--	INSERT INTO @T_PRODUCTION_STATUS_NAME (PRODUCTION_STATUS_NAME)
+--	SELECT CAST(VALUE AS VARCHAR(20)) FROM dbo.[ufn_SplitTable] (@P_PRODUCTION_STATUS_NAME, '|')
+
+	-- 공백을 '' 으로 치환
+	UPDATE	@T_PRODUCTION_STATUS_NAME
+	SET		PRODUCTION_STATUS_NAME = ''
+	WHERE	PRODUCTION_STATUS_NAME = '공백'
+
+
+	SET @T_PRODUCTION_STATUS_NAME_COUNT = ISNULL((SELECT COUNT(*) FROM @T_PRODUCTION_STATUS_NAME), 0)
+	SET @T_PRODUCTION_STATUS_NAME_COUNT = CASE WHEN @T_PRODUCTION_STATUS_NAME_COUNT = 0 THEN 10 ELSE @T_PRODUCTION_STATUS_NAME_COUNT END
+
+    --select * from @T_PRODUCTION_STATUS_NAME
+
+
+	SELECT	*
+	FROM	(
+				SELECT	ROW_NUMBER() OVER	(
+												ORDER BY 
+													CASE WHEN @P_ORDER_BY_NAME = 'REG_DATE'					THEN C.REG_DATE						ELSE 0 END ASC
+												,	C.CARD_SEQ ASC
+													
+											) AS ROW_NUM
+					,	ROW_NUMBER() OVER	(
+												ORDER BY 
+													CASE WHEN @P_ORDER_BY_NAME = 'REG_DATE'					THEN C.REG_DATE						ELSE 0 END DESC
+												,	C.CARD_SEQ DESC
+													
+											) AS ROW_NUM_DESC
+					,	*
+				FROM	(
+							SELECT	DISTINCT 
+									SC.CARD_SEQ
+								,	SC.CARD_CODE	
+								,	SC.CARD_NAME
+								,	SC.CARDSET_PRICE AS CARD_SET_PRICE
+								,	SC.CARD_PRICE
+								,	CASE WHEN ISNULL(SC.CARD_IMAGE, '') = '' THEN '' ELSE 'HTTP://FILE.BARUNSONCARD.COM/COMMON_IMG/' + SC.CARD_IMAGE END AS CARD_IMAGE_FULL_URL
+								,	SC.REGDATE AS REG_DATE
+								,   SC.CardFactory_Price
+								,	ISNULL(SCES.PRODUCTION_STATUS_NAME							, '') AS ERP_PRODUCTION_STATUS_NAME	
+                                ,   SCES.CARD_TYPE_NAME AS CARD_TYPE_NAME	
+
+							FROM	S2_CARD SC
+   							LEFT JOIN	S2_CARD_ERP_STOCK_DEARDEER SCES ON SC.CARD_CODE = SCES.CARD_CODE AND SC.CARD_ERPCODE = SCES.CARD_CODE_ERP
+							--JOIN	S2_CARDKIND SCK ON SC.CARD_SEQ = SCK.CARD_SEQ
+
+							WHERE	1 = 1
+							--AND		SC.CARD_GROUP IN ( 'I' )
+                            AND     SC.DISPLAY_YORN = 'Y'
+							AND		SC.CardBrand = 'X'
+							AND		(
+										    CASE WHEN @P_CARD_DIV = 'C05' THEN  SC.Card_Div else '' end  IN (SELECT value from dbo.FN_SPLIT('C05,C07', ','))
+										OR	CASE WHEN @P_CARD_DIV = 'C06' THEN  SC.Card_Div else '' end  IN (SELECT value from dbo.FN_SPLIT('C01,C02,C06,C09,C10,C11', ',') )
+										OR  SC.Card_Div IN (@P_CARD_DIV)
+									)
+
+							AND		(
+											CASE WHEN ISNULL(@P_CARD_CODE_OR_CARD_NAME, '') = '' THEN '' ELSE SC.CARD_DIV END  NOT IN ('A01','A03')  AND SC.CARD_CODE LIKE '%' + @P_CARD_CODE_OR_CARD_NAME + '%'
+										OR	CASE WHEN ISNULL(@P_CARD_CODE_OR_CARD_NAME, '') = '' THEN '' ELSE SC.CARD_NAME END LIKE '%' + @P_CARD_CODE_OR_CARD_NAME + '%'
+									)
+                            /*
+							AND     (
+                                            @P_PRODUCTION_STATUS_NAME = ''
+                                        OR  ( 
+                                                SCES.PRODUCTION_STATUS_NAME IN (SELECT PRODUCTION_STATUS_NAME FROM @T_PRODUCTION_STATUS_NAME)
+                                                OR CASE WHEN @P_PRODUCTION_STATUS_NAME = '정상판매|단종예정|발주대기|폐기대상|폐기|공백' THEN  SCES.PRODUCTION_STATUS_NAME
+                                                        WHEN @P_PRODUCTION_STATUS_NAME = '공백' THEN  SCES.PRODUCTION_STATUS_NAME 
+                                                        ELSE '' 
+                                                   END IS NULL
+                                            )      
+                                     --   OR  SCES.PRODUCTION_STATUS_NAME is null
+                                    )
+							*/
+                            --봉투, 봉투라이닝 
+						) C
+
+			) A
+
+	WHERE	1 = 1
+	AND		CASE WHEN @P_ORDER_BY_TYPE = 'ASC' THEN A.ROW_NUM ELSE A.ROW_NUM_DESC END > (@P_PAGE_NUMBER - 1) * @P_PAGE_SIZE
+	AND		CASE WHEN @P_ORDER_BY_TYPE = 'ASC' THEN A.ROW_NUM ELSE A.ROW_NUM_DESC END <= @P_PAGE_NUMBER * @P_PAGE_SIZE
+		
+	ORDER BY 
+		CASE WHEN @P_ORDER_BY_TYPE = 'ASC' THEN A.ROW_NUM ELSE A.ROW_NUM_DESC END ASC
+	
+END
+
+
+
+GO

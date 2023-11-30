@@ -1,0 +1,112 @@
+IF OBJECT_ID (N'dbo.SP_SELECT_CUSTOM_ORDER_FOR_AUTO_CHOAN_MACHINE', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_SELECT_CUSTOM_ORDER_FOR_AUTO_CHOAN_MACHINE
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+/*
+
+EXEC SP_SELECT_CUSTOM_ORDER_FOR_AUTO_CHOAN_MACHINE
+
+*/
+
+CREATE PROCEDURE [dbo].[SP_SELECT_CUSTOM_ORDER_FOR_AUTO_CHOAN_MACHINE]
+
+AS
+BEGIN	
+	SET NOCOUNT ON
+	SET LOCK_TIMEOUT 2000
+
+	-- 이 작업은 트랜젝션으로 묶지 않아요.
+	/* 주문일 기준으로 */
+	/* 자동 초안 생성중인 상태가 10분 이상 지났다면, 미완료로 변경하고 다시 시도한다. */
+	/* 30분 이상 지난 건은 그대로 둔다. */
+	UPDATE	CUSTOM_ORDER
+	SET		AUTO_CHOAN_STATUS_CODE = '138001'
+		,	AUTO_CHOAN_REG_DATE = null
+	WHERE	1 = 1
+	AND		AUTO_CHOAN_REG_DATE < CONVERT(VARCHAR(19), DATEADD(MINUTE, -10, GETDATE()), 120)
+	AND		AUTO_CHOAN_REG_DATE > CONVERT(VARCHAR(19), DATEADD(MINUTE, -30, GETDATE()), 120)
+	AND		STATUS_SEQ = 1
+	AND		ISCOMPOSE <> '1'
+	AND		(SRC_COMPOSE_ADMIN_ID IS NULL OR SRC_COMPOSE_ADMIN_ID = '')
+	AND		AUTO_CHOAN_STATUS_CODE = '138101'
+
+	DECLARE @ORDER_SEQ INT
+
+	BEGIN TRAN
+	
+	DECLARE @result int
+	EXEC @result = sp_getapplock @Resource = 'dbo.SP_SELECT_CUSTOM_ORDER_FOR_AUTO_CHOAN_MACHINE', @LockMode = 'Exclusive', @LockTimeout = 0
+
+	IF @result < 0
+	BEGIN
+		-- 어플리케이션 락을 획득하지 못하면 ROLLBACK 하고 다음 기회를 노립니다.
+		SET @ORDER_SEQ = 0
+
+		ROLLBACK TRAN
+	END
+	ELSE
+	BEGIN
+		-- 락을 획득한 경우에만 진행해요.
+
+		-- 작업 해야 할 주문번호 하나를 가져와서		
+		SELECT	TOP 1 
+				@ORDER_SEQ = A.ORDER_SEQ
+		FROM	CUSTOM_ORDER A WITH (HOLDLOCK, ROWLOCK, XLOCK)
+		WHERE	1 = 1
+		AND		A.ORDER_DATE >= CONVERT(VARCHAR(10), GETDATE() -10, 120) + ' 00:00:00'
+		AND		A.STATUS_SEQ = 1
+		AND		A.member_id <> 's4guest'
+		--AND		A.card_seq <> 37283
+		AND		(
+					(
+							A.ISCOMPOSE <> '1'
+						AND	ISNULL(A.AUTO_CHOAN_STATUS_CODE, '138001') = '138001' --미완료, , '138901'실패
+						AND ISNULL(A.SRC_COMPOSE_ADMIN_ID, '') = ''  --AND	(SRC_COMPOSE_ADMIN_ID IS NULL OR SRC_COMPOSE_ADMIN_ID = '') 
+					)
+					OR
+					(
+						ISNULL(A.AUTO_CHOAN_STATUS_CODE, '138001') = '138002'	
+					)
+					OR
+					(
+							A.ISCOMPOSE <> '1'
+						AND	ISNULL(A.AUTO_CHOAN_STATUS_CODE, '') = '138901'   --'138901'실패
+						AND ISNULL(A.SRC_COMPOSE_ADMIN_ID, '') = ''  --AND	(SRC_COMPOSE_ADMIN_ID IS NULL OR SRC_COMPOSE_ADMIN_ID = '') 
+						AND A.Order_seq IN (	SELECT L.order_seq FROM AUTO_CHOAN_LOG L
+												WHERE L.SUB_LOCATION = 'Critical' AND L.order_seq= A.order_seq
+												GROUP BY L.order_seq
+												HAVING COUNT(*) < 3
+													AND DATEADD( MI, 10, MAX(L.REG_DATE) ) < GETDATE()  --실패건은 10분뒤 재실행하고 총3번 실행할수 있음.
+											)
+					)
+					
+				)	
+		
+		ORDER BY ORDER_DATE ASC
+
+		IF @ORDER_SEQ IS NOT NULL
+		BEGIN
+			-- 다시 가져가지 못하도록 진행중으로 업데이트 한다.
+			UPDATE	CUSTOM_ORDER
+			SET		AUTO_CHOAN_STATUS_CODE = '138101'
+				,	AUTO_CHOAN_REG_DATE = GETDATE()
+			WHERE	ORDER_SEQ = @ORDER_SEQ
+
+		END
+		ELSE
+		BEGIN			
+			SET @ORDER_SEQ = 0
+		END
+
+		-- 어플리케이션 락 해제
+		EXEC sp_releaseapplock @Resource = 'dbo.SP_SELECT_CUSTOM_ORDER_FOR_AUTO_CHOAN_MACHINE'
+		COMMIT TRAN		
+	END
+
+	SELECT	@ORDER_SEQ AS ORDER_SEQ
+END
+GO

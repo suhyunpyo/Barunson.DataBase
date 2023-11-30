@@ -1,0 +1,79 @@
+IF OBJECT_ID (N'dbo.SP_T_INVITATION_URL_UPDATE', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_T_INVITATION_URL_UPDATE
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [dbo].[SP_T_INVITATION_URL_UPDATE]
+/***************************************************************
+작성자	:	표수현
+작성일	:	2020-02-15
+SPECIAL LOGIC	: 제작중 상태에서 삭제한 모초 URL만 재사용 가능하도록 초기화
+******************************************************************
+MODIFICATION
+******************************************************************
+수정일           작업자                DESCRIPTION
+==================================================================
+******************************************************************/
+ @ORDER_ID	int = 0
+AS
+
+ SET NOCOUNT ON
+ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED 
+ 
+ DECLARE @URL업데이트개수 INT = 0
+ DECLARE @트랜잭션개수 INT = 0
+ DECLARE @결제상태코드 VARCHAR(10)
+
+ SELECT @결제상태코드 = PAYMENT_STATUS_CODE
+ FROM TB_ORDER 
+ WHERE ORDER_ID = @ORDER_ID
+
+
+ IF @결제상태코드 = 'PSC01' BEGIN  --제작일중일때만
+
+	DECLARE @INVITATION_ID INT = 0
+
+	SELECT @INVITATION_ID = B.INVITATION_ID  
+	FROM TB_ORDER A INNER JOIN 
+		TB_INVITATION B ON A.ORDER_ID = B.ORDER_ID 
+	WHERE A.ORDER_ID = @ORDER_ID
+ 
+	DECLARE @ORIGIN_INVITATION_URL NVARCHAR(200);
+
+	SELECT @ORIGIN_INVITATION_URL = INVITATION_URL
+	FROM TB_INVITATION_DETAIL
+	WHERE INVITATION_ID = @INVITATION_ID
+	  
+	DECLARE @INVITATION_URL NVARCHAR(200) =  NEWID()
+
+	
+	BEGIN TRAN 
+
+		UPDATE TB_INVITATION_DETAIL
+		SET INVITATION_URL = @INVITATION_URL
+		WHERE INVITATION_ID = @INVITATION_ID
+
+		SET @URL업데이트개수 = @@ROWCOUNT
+
+			IF @URL업데이트개수 > 1 BEGIN 
+				ROLLBACK TRAN
+			 END ELSE BEGIN 
+				COMMIT TRAN 
+			 END 
+
+		SET @트랜잭션개수 = @@TRANCOUNT
+ 
+			 IF @트랜잭션개수 > 0 BEGIN  
+				ROLLBACK TRAN 
+			 END 
+
+
+		 INSERT ORIGIN_INVITATION_DETAIL(ORDER_ID, INVITATION_ID, ORIGIN_INVITATION_URL, REG_DATE)
+		 VALUES (@ORDER_ID, @INVITATION_ID, @ORIGIN_INVITATION_URL, GETDATE())
+	 
+
+ END 
+
+GO

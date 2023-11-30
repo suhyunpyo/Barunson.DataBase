@@ -1,0 +1,31 @@
+IF OBJECT_ID (N'dbo.SP_UPDATE_MAIL_MST', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_UPDATE_MAIL_MST
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+/*
+
+
+
+*/
+
+CREATE PROC [dbo].[SP_UPDATE_MAIL_MST]  
+        @MID                    INT
+    ,   @SEND_YORN              CHAR(1)
+    ,   @ERROR_MESSAGE          VARCHAR(MAX)
+
+AS  
+SET NOCOUNT ON
+BEGIN
+    
+    UPDATE  tneo_queue
+    SET     isSend = @SEND_YORN
+        ,   ERROR_MSG = CASE WHEN @ERROR_MESSAGE = '' THEN null ELSE @ERROR_MESSAGE END
+        ,   SEND_DATE = CASE WHEN @SEND_YORN = 'Y' THEN GETDATE() ELSE NULL END
+    WHERE   MID = @MID
+	
+END
+GO

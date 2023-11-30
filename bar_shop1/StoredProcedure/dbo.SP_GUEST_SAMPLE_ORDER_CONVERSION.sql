@@ -1,0 +1,49 @@
+IF OBJECT_ID (N'dbo.SP_GUEST_SAMPLE_ORDER_CONVERSION', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_GUEST_SAMPLE_ORDER_CONVERSION
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- =============================================
+-- Create date: 2018-12-24
+-- Description:	더카드 비회원 샘플주문 전환
+
+-- EXEC dbo.[SP_GUEST_SAMPLE_ORDER_CONVERSION] UID , UNAME, UMAIL, COMPANY_SEQ
+-- /member/login_proc.asp
+-- =============================================
+
+create PROCEDURE [dbo].[SP_GUEST_SAMPLE_ORDER_CONVERSION]
+	@UID								AS      VARCHAR(50) ,
+	@UNAME								AS      VARCHAR(50) ,
+	@UMAIL								AS      VARCHAR(50) ,
+	@COMPANY_SEQ						AS      INT
+AS
+BEGIN
+
+	DECLARE     @SAMPLE_ORDER_CNT       INT
+
+
+    SELECT	@SAMPLE_ORDER_CNT = COUNT(SAMPLE_ORDER_SEQ)
+	FROM	CUSTOM_SAMPLE_ORDER
+	WHERE	1=1
+	AND		MEMBER_ID = ''
+    AND     COMPANY_SEQ = @COMPANY_SEQ
+	AND		MEMBER_NAME = @UNAME
+	AND		MEMBER_EMAIL = @UMAIL
+
+	IF @SAMPLE_ORDER_CNT > 0
+
+	BEGIN
+        UPDATE  CUSTOM_SAMPLE_ORDER
+        SET     MEMBER_ID = @UID
+        WHERE   1=1
+		AND		MEMBER_ID = ''
+        AND     MEMBER_NAME = @UNAME
+        AND     MEMBER_EMAIL = @UMAIL
+        AND     COMPANY_SEQ = @COMPANY_SEQ
+
+    END
+
+END
+GO

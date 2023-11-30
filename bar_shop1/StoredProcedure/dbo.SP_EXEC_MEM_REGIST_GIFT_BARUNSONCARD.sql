@@ -1,0 +1,35 @@
+IF OBJECT_ID (N'dbo.SP_EXEC_MEM_REGIST_GIFT_BARUNSONCARD', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_EXEC_MEM_REGIST_GIFT_BARUNSONCARD
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+
+CREATE PROCEDURE [dbo].[SP_EXEC_MEM_REGIST_GIFT_BARUNSONCARD]
+	@COMPANY_SEQ AS INT
+,   @UID AS VARCHAR(50)
+,   @GIFT_CARD_SEQ AS INT = 0
+AS
+BEGIN
+    
+   IF @COMPANY_SEQ = 5001
+   BEGIN
+   --INSERT INTO [dbo].[evt_mem_regist_gift]
+   --        ([company_seq]
+   --        ,[uid]
+   --        ,[gift_card_seq]
+   --        ,[regist_Date]
+		 --  ,[end_date])
+   --  VALUES
+   --        (@COMPANY_SEQ
+   --        ,@UID
+   --        ,@GIFT_CARD_SEQ
+   --        ,GETDATE()
+		 --  ,DATEADD(DAY, 90, GETDATE()));
+	EXEC SP_EXEC_COUPON_ISSUE_FOR_ONE @COMPANY_SEQ, 'SB', @UID, 'A646-CFCB-4CE4-A38B';
+	EXEC SP_EXEC_COUPON_ISSUE_FOR_ONE @COMPANY_SEQ, 'SB', @UID, '449C-D841-489A-B617';
+   END 
+END
+GO

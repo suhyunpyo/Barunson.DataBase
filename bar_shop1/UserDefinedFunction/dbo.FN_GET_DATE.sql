@@ -1,0 +1,102 @@
+IF OBJECT_ID (N'dbo.FN_GET_DATE', N'FN') IS NOT NULL OR 
+	OBJECT_ID (N'dbo.FN_GET_DATE', N'FS') IS NOT NULL OR 
+	OBJECT_ID (N'dbo.FN_GET_DATE', N'FT') IS NOT NULL OR 
+	OBJECT_ID (N'dbo.FN_GET_DATE', N'IF') IS NOT NULL OR 
+	OBJECT_ID (N'dbo.FN_GET_DATE', N'TF') IS NOT NULL 
+BEGIN
+    DROP FUNCTION dbo.FN_GET_DATE
+END
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- ==========================================================================================
+-- Author:		<Author,,Name>
+-- Create date: 2018.01.04
+-- Description:	샘플주문발송일자 구하기 : 배송일자와 주문일자구하기
+-- 2018.01.03기준으로 휴일은 http://cs.barunsoncard.com/callback/cms_manager.asp (시즌2관리자-보고서>콜센타-휴일관리) 관리되는 날짜기준.(단축근무일도 휴일로 간주함. 김희경 과장님)
+-- ==========================================================================================
+CREATE FUNCTION [dbo].[FN_GET_DATE]
+(
+	@SEARCH_DT		VARCHAR(10),	-- 기준일
+	@DIFFDAY_DAY	INT				-- 평일의 일수 : 휴일관리에 있는 일자는 모두 휴일로 간주함.(단축근무 포함)
+)
+RETURNS VARCHAR(10)
+AS
+BEGIN
+	DECLARE @CURRENT_DEL_DT				VARCHAR(10);	--오늘날짜기준 @DIFFDAY_DAY일전날짜(문자발송대상일 : 휴일, 공휴일 무시)
+	DECLARE @CURRENT_DEL_DW				VARCHAR(10);	--오늘날짜기준 @DIFFDAY_DAY일전날짜의 요일 (일1~토7)
+	DECLARE @DIFFDAY					INT;			--@DIFFDAY_DAY일전날짜부터 오늘까지의 평일
+	DECLARE @DELIVERY_DT				VARCHAR(10);	--배송완료기준 확정일자	
+	DECLARE @HOLIDAYS					INT;			--지정휴일
+	DECLARE @CURRENT_DAY				VARCHAR(10);	--오늘날짜(2017-12-28형식)
+	DECLARE @CURRENT_PRE_HOLIDAYS		INT = 0;		--오늘전날의 지정휴일여부
+	DECLARE @CURRENT_PRE_SAT_HOLIDAYS	INT = 0;		--토요일의 지정휴일여부(오늘이 월요일일때 사용)
+	DECLARE @OK							VARCHAR(2);
+	DECLARE @i							INT;	
+
+	SET @CURRENT_DAY = @SEARCH_DT;
+	SELECT @CURRENT_DEL_DT = CONVERT(VARCHAR(10), CONVERT(DATETIME , @CURRENT_DAY)-4, 120); --오늘날짜기준 4일전날짜
+	SELECT @CURRENT_DEL_DW = DATEPART(DW ,  CONVERT(DATETIME , @CURRENT_DAY)-4); --오늘날짜기준 4일전날짜의 요일 (일1~토7)
+
+	--@DIFFDAY_DAY일전 날짜부터 오늘까지의 평일
+	WITH WEEKDAY_DAY(SDT, EDT) AS(
+		SELECT @CURRENT_DEL_DT , CONVERT(VARCHAR(10), CONVERT(DATETIME , @CURRENT_DAY)-1, 120)
+	)
+	SELECT @DIFFDAY = ((DATEDIFF(D , SDT, EDT)+1)
+			-(DATEDIFF(D,SDT, EDT) + DATEPART(DW,SDT)) / 7
+			-(DATEDIFF(D,SDT, EDT) + DATEPART(DW,DATEADD(D , -1 , SDT))) / 7
+			-(SELECT ISNULL(SUM(CASE WHEN DATEPART(DW ,  CONVERT(DATETIME , YDATE)) >= 2 AND DATEPART(DW ,  CONVERT(DATETIME , YDATE)) <= 6 THEN 1 ELSE 0 END) , 0) DW
+						  FROM HOLIDAYS WHERE YDATE >= CONVERT(VARCHAR(10), CONVERT(DATETIME , SDT), 112) AND  YDATE <= CONVERT(VARCHAR(10), CONVERT(DATETIME , EDT), 112))
+			) 
+			,@HOLIDAYS = (SELECT ISNULL(SUM(CASE WHEN DATEPART(DW ,  CONVERT(DATETIME , YDATE)) >= 2 AND DATEPART(DW ,  CONVERT(DATETIME , YDATE)) <= 6 THEN 1 ELSE 0 END) , 0) DW
+						  FROM HOLIDAYS WHERE YDATE >= CONVERT(VARCHAR(10), CONVERT(DATETIME , SDT), 112) AND  YDATE <= CONVERT(VARCHAR(10), CONVERT(DATETIME , EDT), 112))
+	FROM WEEKDAY_DAY
+
+	SELECT @DELIVERY_DT = CONVERT(VARCHAR(10), CONVERT(DATETIME , @CURRENT_DEL_DT), 120);
+
+	IF @DIFFDAY <> @DIFFDAY_DAY
+		BEGIN
+			SET @i = 1;
+			SET @OK = '';
+
+			WHILE @i <= (@DIFFDAY_DAY - @DIFFDAY)
+				BEGIN
+
+					SET @DELIVERY_DT = CONVERT(VARCHAR(10), CONVERT(DATETIME , @DELIVERY_DT) - 1, 120);
+
+					IF DATEPART(DW ,  CONVERT(DATETIME , @DELIVERY_DT) ) >=2 AND DATEPART(DW ,  CONVERT(DATETIME , @DELIVERY_DT)) <= 6  
+						AND ((SELECT COUNT(*) FROM HOLIDAYS WHERE YDATE = CONVERT(VARCHAR(10), CONVERT(DATETIME , @DELIVERY_DT), 112)) = 0)
+						BEGIN
+							SET @i = @i + 1;
+						end	
+					else
+						BEGIN						
+
+							WHILE @OK <> 'OK'
+								BEGIN
+									
+									SET @DELIVERY_DT = CONVERT(VARCHAR(10), CONVERT(DATETIME , @DELIVERY_DT) - 1, 120);
+
+									IF DATEPART(DW ,  CONVERT(DATETIME , @DELIVERY_DT) ) >=2 AND DATEPART(DW ,  CONVERT(DATETIME , @DELIVERY_DT)) <= 6  
+											AND ((SELECT COUNT(*) FROM HOLIDAYS WHERE YDATE = CONVERT(VARCHAR(10), CONVERT(DATETIME , @DELIVERY_DT), 112)) = 0)
+										BEGIN
+											SET @i = @i + 1;	
+											SET @OK = 'OK';
+											BREAK;
+										END
+									ELSE
+										BEGIN
+											SET @DELIVERY_DT = @DELIVERY_DT;
+										END						
+								END 									
+						END
+				END
+		END
+
+	RETURN CONVERT(VARCHAR(10), @DELIVERY_DT, 120)
+
+END
+GO

@@ -1,0 +1,121 @@
+IF OBJECT_ID (N'dbo.SP_UPDATE_OUTSOURCING_ORDER_MST_FOR_RECEIPT', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_UPDATE_OUTSOURCING_ORDER_MST_FOR_RECEIPT
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+    
+/*    
+    
+SELECT * FROM OUTSOURCING_ORDER_MST    
+    
+*/    
+    
+CREATE PROC [dbo].[SP_UPDATE_OUTSOURCING_ORDER_MST_FOR_RECEIPT]      
+    @P_OUTSOURCING_ORDER_SEQS AS VARCHAR(4000)    
+	, @P_OUTSOURCING_TYPE_CODE AS VARCHAR(100) = ''  
+    
+AS      
+    
+BEGIN    
+        
+    DECLARE @T_OUTSOURCING_ORDER_SEQ TABLE    
+    (    
+     OUTSOURCING_ORDER_SEQ int NOT NULL    
+    )    
+  
+
+    
+	IF ISNULL(@P_OUTSOURCING_TYPE_CODE, '' ) = '107015'   
+		BEGIN  
+			INSERT INTO @T_OUTSOURCING_ORDER_SEQ (OUTSOURCING_ORDER_SEQ)    
+    
+			SELECT OUTSOURCING_ORDER_SEQ  
+			FROM OUTSOURCING_ORDER_MST  
+			WHERE 1 = 1  
+			AND OUTSOURCING_ORDER_SEQ IN (SELECT * FROM dbo.[ufn_SplitTable](@P_OUTSOURCING_ORDER_SEQS, '|') )  
+			AND COMPANY_TYPE_CODE = @P_OUTSOURCING_TYPE_CODE  
+			AND ORDER_STATUS_CODE = '100011'
+		END  
+	ELSE  
+		BEGIN  
+			INSERT INTO @T_OUTSOURCING_ORDER_SEQ (OUTSOURCING_ORDER_SEQ)    
+			SELECT * FROM dbo.[ufn_SplitTable](@P_OUTSOURCING_ORDER_SEQS, '|')    
+		END  
+   
+     
+    --INSERT INTO @T_OUTSOURCING_ORDER_SEQ (OUTSOURCING_ORDER_SEQ)    
+    --SELECT * FROM dbo.[ufn_SplitTable](@P_OUTSOURCING_ORDER_SEQS, '|')    
+  
+  
+    
+    
+    /* 접수처리 */    
+    UPDATE  OUTSOURCING_ORDER_MST    
+    SET     RECEIPT_DATE = GETDATE()    
+        ,   ORDER_STATUS_CODE = '100021'    
+    WHERE   OUTSOURCING_ORDER_SEQ IN ( SELECT OUTSOURCING_ORDER_SEQ FROM @T_OUTSOURCING_ORDER_SEQ )    
+    
+    
+    
+    /* CUSTOM_ORDER_PLIST 인쇄일, 인쇄담당자 업데이트 */    
+    UPDATE  CUSTOM_ORDER_PLIST    
+    SET     PRINT_DATE = GETDATE()    
+        ,   PRINT_ADMIN_ID = A.COMPANY_NAME    
+    FROM    CUSTOM_ORDER_PLIST COP    
+    JOIN    (    
+                SELECT  OOM.ORDER_SEQ, DTL_NAME AS COMPANY_NAME    
+                FROM    OUTSOURCING_ORDER_MST OOM    
+                JOIN    @T_OUTSOURCING_ORDER_SEQ T_OOM ON OOM.OUTSOURCING_ORDER_SEQ = T_OOM.OUTSOURCING_ORDER_SEQ    
+                JOIN    COMMON_CODE CC ON CC.CLSS_CODE = '107' AND CC.CMMN_CODE = OOM.COMPANY_TYPE_CODE    
+                WHERE   OOM.ORDER_SEQ IS NOT NULL    
+                AND     OOM.ORDER_SEQ > 0    
+                AND     OOM.COMPANY_TYPE_CODE NOT IN ('107003', '107004', '107005')     -- /* 동박 제외, 레이저 카페, 레이저컷(내부) 제외 */    
+            ) A ON COP.ORDER_SEQ = A.ORDER_SEQ    
+    WHERE   PRINT_TYPE IN ('C', 'I')    
+    
+    
+    
+    DECLARE @ORDER_SEQ AS INT    
+    DECLARE OOM_CURSOR CURSOR LOCAL FOR    
+            
+        SELECT  OOM.ORDER_SEQ    
+        FROM    OUTSOURCING_ORDER_MST OOM    
+        JOIN    @T_OUTSOURCING_ORDER_SEQ T_OOM ON OOM.OUTSOURCING_ORDER_SEQ = T_OOM.OUTSOURCING_ORDER_SEQ    
+        JOIN    COMMON_CODE CC ON CC.CLSS_CODE = '107' AND CC.CMMN_CODE = OOM.COMPANY_TYPE_CODE    
+        WHERE   OOM.ORDER_SEQ IS NOT NULL    
+        AND     OOM.ORDER_SEQ > 0    
+        AND     OOM.COMPANY_TYPE_CODE NOT IN ('107003', '107004', '107005')             -- /* 동박 제외, 레이저 카페, 레이저컷(내부) 제외 */    
+    
+    OPEN OOM_CURSOR;    
+    
+    FETCH NEXT FROM OOM_CURSOR INTO @ORDER_SEQ    
+    
+        /* ERP 전송 */    
+        EXEC SP_EXEC_OUTSOURCING_ORDER_ERP_UPDATE @ORDER_SEQ, 'B'    
+        
+        /* 모두 인쇄 처리 되었을 경우 주문 상태 업데이트 */    
+        IF NOT EXISTS( SELECT ID FROM CUSTOM_ORDER_PLIST WHERE ORDER_SEQ = @ORDER_SEQ AND ISNOTPRINT <> '1' AND PRINT_COUNT > 0 AND PRINT_DATE IS NULL )    
+            BEGIN    
+                
+                /* 인쇄일이 셋팅 안되었을 경우 현재 날짜로 업데이트 */    
+                UPDATE CUSTOM_ORDER    
+       SET  SRC_PRINT_DATE = GETDATE()    
+       WHERE ORDER_SEQ = @ORDER_SEQ    
+       AND  SRC_PRINT_DATE IS NULL    
+    
+       UPDATE CUSTOM_ORDER    
+       SET  SRC_PRINT_COMMIT_DATE = getdate()    
+        , STATUS_SEQ = 12    
+       WHERE ORDER_SEQ = @ORDER_SEQ    
+    
+            END    
+    
+    CLOSE OOM_CURSOR;    
+ DEALLOCATE OOM_CURSOR;    
+    
+    
+    
+END    
+GO

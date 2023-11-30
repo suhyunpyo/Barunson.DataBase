@@ -1,0 +1,115 @@
+IF OBJECT_ID (N'dbo.SP_INSERT_FEELMAKER_COUPON_BATCH', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_INSERT_FEELMAKER_COUPON_BATCH
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- =============================================
+-- Author:		황새롬
+-- Create date: 2018-01-31
+-- Description:	바른손카드 식전영상쿠폰발급(필모션)
+-- 원주문/100매이상 구입시 발급
+-- EXEC dbo.[SP_INSERT_MOVIE_EVENT_SB] 주문번호, 's5guest'
+
+-- 2020.09.01 
+-- 식전영상 외 감사영상이 추가되면서 COUPON_MST_SEQ 추가된 버전으로 다시 만듬
+-- SP_INSERT_FEELMAKER_COUPON_EVENT로 새로만듬
+-- 바른손 식전영상 : 301
+-- EXEC dbo.[SP_INSERT_FEELMAKER_COUPON_BATCH] 
+
+-- 초안 확정했으나, 식전/감사영상 쿠폰 자동발급되지 않음
+-- (비회원 -> 회원 연동 이후에도 동일 현상 발생)
+-- 결제완료 후 회원가입한 고객..
+
+--EXEC SP_INSERT_FEELMAKER_COUPON_BATCH
+-- =============================================
+
+CREATE PROCEDURE [dbo].[SP_INSERT_FEELMAKER_COUPON_BATCH]
+AS
+BEGIN
+	
+	DECLARE		@MEMBER_ID		AS	VARCHAR(50) = ''
+	    ,		@SALES_GUBUN	AS	VARCHAR(2)
+	    ,		@ORDER_SEQ		AS	INT		
+		,		@COUPON_MST_SEQ_V1 AS INT
+		,		@COUPON_MST_SEQ_V2 AS INT
+
+
+ --커서를 이용하여 해당되는 고객정보를 얻는다.  
+ DECLARE cur_AutoInsert_For_Order CURSOR FAST_FORWARD  
+ FOR 
+ 
+	SELECT C.ORDER_SEQ, C.MEMBER_ID
+	, ( CASE WHEN SALES_GUBUN = 'C' OR  SALES_GUBUN = 'H' THEN 'B' ELSE SALES_GUBUN END) SALES_GUBUN
+	FROM CUSTOM_ORDER C, S2_USERINFO M
+	WHERE C.MEMBER_ID = M.UID
+	AND C.SETTLE_DATE >= DATEADD(HOUR,-8, GETDATE())
+	AND C.SETTLE_STATUS = '2'
+	AND M.SITE_DIV ='SB'
+	AND ORDER_TYPE IN ('1','6','7')
+	AND STATUS_SEQ >= '9'
+	AND UP_ORDER_SEQ IS NULL 
+	AND SALES_GUBUN <> 'SD'
+	AND ORDER_COUNT >= 100
+	AND ORDER_DATE < INTERGRATION_DATE
+
+
+ OPEN cur_AutoInsert_For_Order  
+
+ FETCH NEXT FROM cur_AutoInsert_For_Order INTO @ORDER_SEQ,  @MEMBER_ID, @SALES_GUBUN
+  
+ WHILE @@FETCH_STATUS = 0  
+  
+ BEGIN
+
+
+   IF @SALES_GUBUN = 'SB'  
+    BEGIN  
+     SET @COUPON_MST_SEQ_V1 = 301
+     SET @COUPON_MST_SEQ_V2 = 627
+    END  
+  
+   ELSE IF @SALES_GUBUN = 'ST'  
+    BEGIN  
+     SET @COUPON_MST_SEQ_V1 = 303
+     SET @COUPON_MST_SEQ_V2 = 628
+    END  
+
+   --ELSE IF @SALES_GUBUN = 'B'  
+   -- BEGIN  
+     --SET @COUPON_MST_SEQ_V1 = 301
+     --SET @COUPON_MST_SEQ_V2 = 627
+   -- END  
+ 
+   ELSE IF @SALES_GUBUN = 'SS' 
+    BEGIN  
+     SET @COUPON_MST_SEQ_V1 = 291
+     SET @COUPON_MST_SEQ_V2 = 292
+    END 
+	
+	IF @SALES_GUBUN = 'B' 
+		BEGIN
+			EXEC SP_INSERT_MOVIE_EVENT_JEHU_V2 @MEMBER_ID -- 식전영상 발급
+	
+			EXEC SP_INSERT_THK_MOVIE_EVENT_JEHU @MEMBER_ID -- 감사영상 발급
+		
+		END 
+	
+	ELSE 
+	
+		BEGIN
+			EXEC SP_INSERT_FEELMAKER_COUPON_EVENT @ORDER_SEQ ,@MEMBER_ID,@SALES_GUBUN,@COUPON_MST_SEQ_V1 -- 식전영상
+	
+			EXEC SP_INSERT_FEELMAKER_COUPON_EVENT @ORDER_SEQ ,@MEMBER_ID,@SALES_GUBUN,@COUPON_MST_SEQ_V2 -- 감사인사영상
+		
+		END
+
+  FETCH NEXT FROM cur_AutoInsert_For_Order INTO @ORDER_SEQ,  @MEMBER_ID, @SALES_GUBUN 
+ END  
+  
+ CLOSE cur_AutoInsert_For_Order  
+ DEALLOCATE cur_AutoInsert_For_Order
+
+END
+GO

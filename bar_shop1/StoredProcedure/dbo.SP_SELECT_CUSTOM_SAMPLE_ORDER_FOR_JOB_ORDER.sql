@@ -1,0 +1,91 @@
+IF OBJECT_ID (N'dbo.SP_SELECT_CUSTOM_SAMPLE_ORDER_FOR_JOB_ORDER', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_SELECT_CUSTOM_SAMPLE_ORDER_FOR_JOB_ORDER
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+-- =============================================
+-- Author:		<Author,,Name>
+-- Create date: <Create Date,,>
+-- Description:	<Description,,>
+-- =============================================
+
+-- EXEC [SP_SELECT_CUSTOM_ORDER_CHOAN_INFO] 1893022, 5690591
+-- EXEC [SP_SELECT_CUSTOM_ORDER_CHOAN_INFO] 1893022, 5690592
+-- EXEC [SP_SELECT_CUSTOM_ORDER_CHOAN_INFO] 1893022, 5690593
+
+-- EXEC SP_SELECT_CUSTOM_SAMPLE_ORDER_FOR_JOB_ORDER 1299489, 'N', 'O'
+-- EXEC SP_SELECT_CUSTOM_SAMPLE_ORDER_FOR_JOB_ORDER 1299489, 'Y', 'U'
+-- EXEC SP_SELECT_CUSTOM_SAMPLE_ORDER_FOR_JOB_ORDER 1299489, 'N', 'O'
+
+CREATE PROCEDURE [dbo].[SP_SELECT_CUSTOM_SAMPLE_ORDER_FOR_JOB_ORDER]
+		@p_sample_order_seq AS INT
+	,   @p_is_list AS CHAR(1)
+	,   @p_range_type AS CHAR(1)
+
+AS
+BEGIN
+
+DECLARE @SQL AS NVARCHAR(4000)
+SET @SQL = ''
+
+IF @p_is_list = 'N' 
+    BEGIN
+        SELECT  COUNT(*) AS TOT_CNT
+			,	CASE WHEN ISNULL(MAX(MULTI_PACK_SEQ), 0) = 0 THEN 'N' ELSE 'Y' END AS IS_MULTI_PACK
+            ,   MAX(CSO.SALES_GUBUN) AS SALES_GUBUN
+        FROM    CUSTOM_SAMPLE_ORDER CSO
+        JOIN    CUSTOM_SAMPLE_ORDER_ITEM CSOI ON CSO.SAMPLE_ORDER_SEQ = CSOI.SAMPLE_ORDER_SEQ
+        JOIN    S2_CARD SC ON CSOI.CARD_SEQ = SC.CARD_SEQ
+        WHERE   CSO.SAMPLE_ORDER_SEQ = @p_sample_order_seq
+        AND     (CSOI.md_recommend = 'N' OR CSOI.md_recommend IS NULL)
+
+		-- THANKS_1 카드 출력 제외 17.06.01 강구완과장 요청
+		-- 37445, 37447 현대백화점판교점-리플렛 출력제외 강구완님 요청 2019.11.07
+		AND		CSOI.CARD_SEQ NOT IN (35620, 37445, 37447, 37704, 38277)
+		AND isChu <> 9
+    END
+
+ELSE
+    BEGIN
+
+        SELECT  *
+        FROM    (
+					SELECT TOP 20 SC.CARD_SEQ
+						,	SC.CARD_CODE
+						,	CSOI.ISCHU
+						,	ISNULL(SC.CARD_IMAGE, '') AS CARD_IMAGE
+						,	SC.CARD_NAME
+						,	SC.CARDSET_PRICE
+						,	ROW_NUMBER() OVER (ORDER BY SC.CARD_CODE ASC) AS PARTITION_NUM
+
+					FROM    CUSTOM_SAMPLE_ORDER CSO
+					JOIN    CUSTOM_SAMPLE_ORDER_ITEM CSOI 
+					ON		CSO.SAMPLE_ORDER_SEQ = CSOI.SAMPLE_ORDER_SEQ
+
+					JOIN    S2_CARD SC 
+					ON		CSOI.CARD_SEQ = SC.CARD_SEQ
+
+					WHERE   CSO.SAMPLE_ORDER_SEQ = @p_sample_order_seq
+					AND     (CSOI.md_recommend = 'N' OR CSOI.md_recommend IS NULL) 
+
+					-- THANKS_1 카드 출력 제외 17.06.01 강구완과장 요청
+					-- 37445, 37447 현대백화점판교점-리플렛 출력제외 강구완님 요청 2019.11.07
+					AND     CSOI.CARD_SEQ NOT IN (35620, 37445, 37447, 37704)
+				) A
+
+        WHERE   1 = 1
+
+		--AND		(
+		--				(@p_range_type = 'O' AND A.PARTITION_NUM > 10)
+		--			OR  (@p_range_type <> 'O' AND A.PARTITION_NUM <= 10)
+		--		)
+
+    END
+
+    
+	
+END
+GO

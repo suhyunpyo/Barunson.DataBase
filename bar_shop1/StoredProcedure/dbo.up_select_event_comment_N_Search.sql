@@ -1,0 +1,107 @@
+IF OBJECT_ID (N'dbo.up_select_event_comment_N_Search', N'P') IS NOT NULL DROP PROCEDURE dbo.up_select_event_comment_N_Search
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- =============================================  
+-- Author:  강현주  
+-- Create date: 2015-01-26  
+-- Description: 이벤트 페이지 덧글 - 검색용  
+-- EXEC up_select_event_comment_N_Search 5007, 138, 0, NULL, 1, 20, 36693  
+-- EXEC up_select_event_comment_N_Search_ 5007, 139, 0, NULL, 1, 10, null  
+-- =============================================  
+CREATE PROCEDURE [dbo].[up_select_event_comment_N_Search]  
+ -- Add the parameters for the stored procedure here  
+ @company_seq      int,  
+ @ER_Card_Seq   int=0, --특정리뷰만만 조회  
+ @ER_Type    int=0,  
+ @userid     nvarchar(50),  
+ @page     int=1,  
+ @pagesize    int=50,  
+    @review_url             nvarchar(50)  
+AS  
+BEGIN  
+ -- SET NOCOUNT ON added to prevent extra result sets from  
+ -- interfering with SELECT statements.  
+ SET NOCOUNT ON;  
+
+ /*#5074*/
+ DECLARE @Start_ER_Idx int = 0
+ IF @ER_Card_Seq = 139 
+ BEGIN
+	SET @Start_ER_Idx = 6851
+ END
+ /**/
+    -- Insert statements for procedure here  
+ -- total count  
+ SELECT COUNT(ER_Idx) AS TOT   
+ FROM   
+  S4_Event_Review_New  
+ WHERE   
+  ER_Company_Seq = @company_seq  
+  AND ER_card_seq = ISNULL(@ER_Card_Seq, ER_card_seq)  
+  AND ER_Type = ISNULL(@ER_Type, ER_Type)  
+  AND ER_UserId = ISNULL(@userid, ER_UserId)  
+  AND ER_View = 0  
+        AND ER_Review_Url = ISNULL(@review_url, ER_Review_Url)  
+  AND ER_Idx > @Start_ER_Idx --#5074
+
+ -- goods list  
+ SELECT *   
+ FROM  
+ (  
+  SELECT  ROW_NUMBER() OVER (ORDER BY A.ER_Idx DESC ) AS RowNum      
+   , A.ER_Idx       --1  
+   , A.ER_Type       --2  
+   , A.ER_Card_Seq      --3  
+   , A.ER_Regdate      --4  
+   , ISNULL(A.ER_Recom_Cnt, 0) AS ER_Recom_Cnt    --5  
+   , ISNULL(A.ER_Review_Title, '') AS ER_Review_Title  --6  
+   , ISNULL(A.ER_Review_Url, '') AS ER_Review_Url   --7  
+   , ISNULL(A.ER_Review_Content, '') AS ER_Review_Content --8  
+   , A.ER_Review_Star     --9  
+   , A.ER_Status      --10  
+   , A.ER_View       --11  
+   , A.ER_UserId      --12  
+   , A.ER_UserName      --13  
+   , ISNULL(B.ERA_Comment,'') AS ERA_Comment  ----14  
+            , (SELECT Card_Name FROM S2_CARD WHERE CARD_SEQ = A.ER_Review_Url ) as CARD_NAME  
+   --, (SELECT top 1 CouponCD FROM tcouponsub ts where ts.UserID = A.ER_UserId and CouponCD IN ('C0000190', 'C0000191', 'C0000192', 'C0000193', 'C0000194')  ) as couponCD  
+  FROM   
+   S4_Event_Review_New A  
+   LEFT OUTER JOIN S4_Event_Review_Status_NEW B ON A.ER_Idx=B.ERA_ER_idx  
+  WHERE   
+   A.ER_Company_Seq = @company_seq  
+   AND A.ER_card_seq = ISNULL(@ER_Card_Seq, A.ER_card_seq)  
+   AND A.ER_Type = ISNULL(@ER_Type, A.ER_Type)  
+   AND A.ER_UserId = ISNULL(@userid, A.ER_UserId)  
+            AND A.ER_Review_Url = ISNULL(@review_url, A.ER_Review_Url)  
+   AND A.ER_View = 0  
+   AND A.ER_Idx > @Start_ER_Idx --#5074
+ ) AS RESULT  
+ WHERE RowNum BETWEEN ( ( (@page - 1) * @pagesize ) + 1 ) AND ( @page * @pagesize )  
+ --ORDER BY RowNum DESC  
+    
+ SELECT B.ER_Review_Url  
+        , (SELECT CARD_CODE FROM S2_CARD WHERE CARD_SEQ = B.ER_Review_Url ) as CARD_CODE  
+        , (SELECT CARD_NAME FROM S2_CARD WHERE CARD_SEQ = B.ER_Review_Url ) as CARD_NAME  
+    FROM (  
+            SELECT  ER_Review_Url  
+         FROM   
+          S4_Event_Review_New  
+         WHERE   
+          ER_Company_Seq = @company_seq  
+          AND ER_card_seq = ISNULL(@ER_Card_Seq, ER_card_seq)  
+          AND ER_Type = ISNULL(@ER_Type, ER_Type)  
+          AND ER_UserId = ISNULL(@userid, ER_UserId)  
+          AND ER_View = 0  
+            GROUP BY ER_Review_Url      
+    ) AS B  
+  
+END
+
+GO

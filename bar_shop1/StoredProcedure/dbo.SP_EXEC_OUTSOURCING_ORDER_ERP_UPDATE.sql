@@ -1,0 +1,24 @@
+IF OBJECT_ID (N'dbo.SP_EXEC_OUTSOURCING_ORDER_ERP_UPDATE', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_EXEC_OUTSOURCING_ORDER_ERP_UPDATE
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+/*
+    EXEC SP_EXEC_OUTSOURCING_ORDER_ERP_UPDATE 2090806 , 'B'
+*/
+CREATE PROCEDURE [dbo].[SP_EXEC_OUTSOURCING_ORDER_ERP_UPDATE]
+    @p_order_seq AS INT
+,   @p_inv_status AS CHAR(1)
+AS
+BEGIN
+
+    UPDATE  [erpdb.bhandscard.com].[XERP].dbo.[C_OsOrderData]
+    SET     InvStatus = @p_inv_status
+        ,   PrintDate = CONVERT(NCHAR(8), GETDATE(), 112)
+    WHERE   JumunNo = CAST(@p_order_seq AS NVARCHAR(10))
+    AND     InvStatus IN ( 'A' )
+
+END
+GO

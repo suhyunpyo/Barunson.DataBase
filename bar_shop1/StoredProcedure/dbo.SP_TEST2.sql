@@ -1,0 +1,23 @@
+IF OBJECT_ID (N'dbo.SP_TEST2', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_TEST2
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [dbo].[SP_TEST2] --@gubun = 1
+	@GUBUN int = 1
+AS
+	
+	IF @GUBUN =  1 BEGIN 
+			select top 50 code from LT_DELCODE
+			where IMG_YN is null
+
+	END ELSE BEGIN 
+
+	 select  top 50 code = DESTINATION_CODE from LT_ZIPCODE group by DESTINATION_CODE
+
+
+	END 
+
+GO

@@ -1,0 +1,131 @@
+IF OBJECT_ID (N'dbo.UP_UPDATE_LOTTE_DELIVERY_DELCODE', N'P') IS NOT NULL DROP PROCEDURE dbo.UP_UPDATE_LOTTE_DELIVERY_DELCODE
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [dbo].[UP_UPDATE_LOTTE_DELIVERY_DELCODE]
+/***************************************************************
+작성자	:	표수현
+작성일	:	2022-02-23
+DESCRIPTION	: 빠른손에서 사용 - 기존의 CJ 택배송장건 주문을 롯데택배송장번호와 택배사코드(LT)로 수정 
+SPECIAL LOGIC	: GUBUN - A -> 청첩장 - B -> 샘플 C-> 부가상품 
+******************************************************************
+MODIFICATION
+******************************************************************
+수정일           작업자                DESCRIPTION
+==================================================================
+******************************************************************/	
+	@GUBUN	CHAR(1) = 'A',
+	@ORDER_SEQ		INT = 4106354,		--주문번호
+	@DELIVERY_SEQ	INT,
+	@DELIVERY_CODE_NUM VARCHAR(50)
+AS
+BEGIN
+	
+	SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED
+	
+	SET NOCOUNT ON;
+	--select @DELIVERY_CODE_NUM
+	--SET @DELIVERY_CODE_NUM = Replace(@DELIVERY_CODE_NUM,' ' ,'')  
+
+	--select @DELIVERY_CODE_NUM
+
+	
+
+	--			UPDATE	DELIVERY_INFO 
+	--		SET		DELIVERY_COM = 'LT',
+	--				DELIVERY_CODE_NUM = @DELIVERY_CODE_NUM
+	--		WHERE	ORDER_SEQ = @ORDER_SEQ AND 
+	--				DELIVERY_SEQ = @DELIVERY_SEQ AND 
+	--				DELIVERY_COM = 'CJ'
+
+					
+	--			UPDATE	DELIVERY_INFO 
+	--		SET		DELIVERY_COM = 'LT',
+	--				DELIVERY_CODE_NUM = Replace(DELIVERY_CODE_NUM,' ' ,'')  
+	--		WHERE	ORDER_SEQ = @ORDER_SEQ AND 
+	--				DELIVERY_SEQ = @DELIVERY_SEQ AND 
+	--				DELIVERY_COM = 'CJ'
+
+
+
+		--DECLARE @DELIVERY_ID INT = 0 
+
+		--SELECT	@DELIVERY_ID = ID 
+		--FROM	DELIVERY_INFO 
+		--WHERE	ORDER_SEQ = @ORDER_SEQ AND 
+		--		DELIVERY_SEQ = @DELIVERY_SEQ AND 
+		--		DELIVERY_COM = 'CJ'
+
+
+		--		UPDATE	DELIVERY_INFO 
+		--	SET		DELIVERY_COM = 'LT',
+		--			DELIVERY_CODE_NUM = Replace(@DELIVERY_CODE_NUM,' ' ,'')  
+		--	WHERE	ORDER_SEQ = @ORDER_SEQ AND 
+		--			DELIVERY_SEQ = @DELIVERY_SEQ AND 
+		--			DELIVERY_COM = 'CJ'
+
+
+		--				--		-- 송장번호 , 택배사코드 수정 
+		--	UPDATE	DELIVERY_INFO_DELCODE
+		--	SET		DELIVERY_CODE_NUM = Replace(@DELIVERY_CODE_NUM,' ' ,'')  ,
+		--			DELIVERY_COM = 'LT'
+		--	WHERE	ORDER_SEQ = @ORDER_SEQ AND 	
+		--			DELIVERY_ID = @DELIVERY_ID AND
+		--			DELIVERY_COM = 'CJ'
+
+	IF @GUBUN = 'A' BEGIN 
+		
+		DECLARE @DELIVERY_ID INT = 0 
+
+		SELECT	@DELIVERY_ID = ID 
+		FROM	DELIVERY_INFO 
+		WHERE	ORDER_SEQ = @ORDER_SEQ AND 
+				DELIVERY_SEQ = @DELIVERY_SEQ AND 
+				DELIVERY_COM = 'CJ'
+
+		IF @DELIVERY_ID > 0 BEGIN 
+
+			-- 송장번호 , 택배사코드 수정 
+			UPDATE	DELIVERY_INFO 
+			SET		DELIVERY_COM = 'LT',
+					DELIVERY_CODE_NUM = @DELIVERY_CODE_NUM
+			WHERE	ORDER_SEQ = @ORDER_SEQ AND 
+					DELIVERY_SEQ = @DELIVERY_SEQ AND 
+					DELIVERY_COM = 'CJ'
+
+			-- 송장번호 , 택배사코드 수정 
+			UPDATE	DELIVERY_INFO_DELCODE
+			SET		DELIVERY_CODE_NUM = @DELIVERY_CODE_NUM,
+					DELIVERY_COM = 'LT'
+			WHERE	ORDER_SEQ = @ORDER_SEQ AND 	
+					DELIVERY_ID = @DELIVERY_ID AND
+					DELIVERY_COM = 'CJ'
+				
+
+		END 
+
+
+
+	END ELSE IF @GUBUN = 'B' BEGIN 
+
+			UPDATE CUSTOM_SAMPLE_ORDER 
+			SET		DELIVERY_CODE_NUM = @DELIVERY_CODE_NUM,
+					DELIVERY_COM = 'LT'
+			WHERE	SAMPLE_ORDER_SEQ = @ORDER_SEQ AND DELIVERY_COM = 'CJ'
+
+
+	END ELSE BEGIN 
+	
+			UPDATE CUSTOM_ETC_ORDER 
+			SET		DELIVERY_CODE = @DELIVERY_CODE_NUM,
+					DELIVERY_COM = 'LT'
+			WHERE	ORDER_SEQ = @ORDER_SEQ AND DELIVERY_COM = 'CJ'
+
+	END 
+
+
+END
+GO

@@ -1,0 +1,21 @@
+IF OBJECT_ID (N'dbo.spBarunnIP_SEARCH', N'P') IS NOT NULL DROP PROCEDURE dbo.spBarunnIP_SEARCH
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [dbo].[spBarunnIP_SEARCH]
+    @IP_NO INT = 0,
+    @UserName VARCHAR(20) = NULL
+AS
+BEGIN 
+
+	SELECT IP_ID, IP_NO, UserName, ActionDate 
+	FROM BarunnIP
+	WHERE UserName LIKE '%'+ISNULL(@UserName, '')+'%'
+	ORDER BY IP_ID, IP_NO
+
+END
+
+GO

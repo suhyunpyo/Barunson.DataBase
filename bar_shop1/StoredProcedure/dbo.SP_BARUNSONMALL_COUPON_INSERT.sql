@@ -1,0 +1,163 @@
+IF OBJECT_ID (N'dbo.SP_BARUNSONMALL_COUPON_INSERT', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_BARUNSONMALL_COUPON_INSERT
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+/*******************************************************
+
+2019-01-03	제휴쿠폰 추가 할인율변경 신규쿠폰 추가 발급
+ 	
+	--BARUNSONAMLL17R_JEHU
+	--BARUNSONAMLL15R_JEHU
+	--BARUNSONAMLL10R_JEHU
+
+	-- 390/365
+
+	select * from company where company_name = '삼성결혼도움방'
+	
+	select * from company where company_name = '삼성카드오픈웨딩'
+
+*********************************************************/
+
+create PROCEDURE [dbo].[SP_BARUNSONMALL_COUPON_INSERT]
+	@UID		 AS NVARCHAR(40),
+	@COMPANY_SEQ AS VARCHAR(10), 
+	@CARDBRAND	 AS NVARCHAR(3) 	
+AS
+
+BEGIN
+	SET NOCOUNT ON;
+
+	DECLARE @ResultCNT INT 
+	DECLARE @CouponCNT INT 
+	DECLARE @ERP_PARTCODE varchar(20)
+	DECLARE @coupon_code VARCHAR(20) 
+	
+	DECLARE @ChkCompnayCNT INT 
+		
+	-- 2021.05.03 제휴몰 할인율 정책 변경
+	-- 2023.04.10 제휴몰 할인율 정책 변경 #11362
+	
+	--* 기존 할인율 정책 유지 제휴사 LIST 체크
+
+	SELECT @ChkCompnayCNT = COUNT(company_seq) 
+	  FROM company
+	 WHERE company_seq IN (7179,7872,7722,6923,7840,7894,2708,7871,2715,7886,7666,5437,7679,7318,7841,7922,7792,6586,7601,6470,7602,7873,7713,5115,8116,8103,8225,8209,7555)
+	   AND company_seq = @COMPANY_SEQ
+
+	-- 발급받을 쿠폰 확인하기
+	SELECT TOP 1 @ERP_PARTCODE = ERP_PartCode FROM COMPANY WHERE COMPANY_SEQ = @COMPANY_SEQ 
+
+	SET @COUPON_CODE = 'N'
+
+	-- 변경된 할인율 정책으로
+	IF @ChkCompnayCNT = 1
+		IF @CARDBRAND ='S' OR @CARDBRAND = 'D'
+		BEGIN
+			SET @COUPON_CODE = 'BARUNSONAMLL10R_JEHU'
+		END
+		ELSE
+		BEGIN
+			SET @COUPON_CODE = 'BARUNSONAMLL15R_JEHU'
+		END
+	ELSE
+	BEGIN
+		IF @ERP_PARTCODE = '390'	--제휴
+		BEGIN		
+			IF @COMPANY_SEQ = 5319 --바른임직원
+			BEGIN
+				SET @COUPON_CODE = 'BARUNSONAMLL25R_JEHU'
+			END			
+			ELSE
+			BEGIN
+				SET @COUPON_CODE = 'BARUNSONAMLL10R_JEHU'
+			END
+		END
+
+		ELSE IF @ERP_PARTCODE = '365'	-- 웨딩			 
+		BEGIN		
+			BEGIN
+				SET @COUPON_CODE = 'BARUNSONAMLL10R_JEHU'
+			END
+		END
+		
+		ELSE IF @ERP_PARTCODE = '366'	-- 웨딩(비직영)
+		BEGIN
+			IF @COMPANY_SEQ IN (8114,8153,8002,8220) -- 초록어린이재단,파스텔무비,스타벅스,비즈마켓
+			BEGIN
+				SET @COUPON_CODE = 'BARUNSONAMLL10R_JEHU'
+			END
+			ELSE IF @COMPANY_SEQ = 8115 -- 메리어트호텔
+				IF @CARDBRAND ='S'
+				BEGIN
+					SET @COUPON_CODE = 'BARUNSONAMLL10R_JEHU'
+				END
+				ELSE
+				BEGIN
+					SET @COUPON_CODE = 'BARUNSONAMLL17R_JEHU'
+				END
+			ELSE IF @COMPANY_SEQ = 8138 -- 아크레도
+				IF @CARDBRAND ='S'
+				BEGIN
+					SET @COUPON_CODE = 'BARUNSONAMLL10R_JEHU'
+				END
+				ELSE
+				BEGIN
+					SET @COUPON_CODE = 'BARUNSONAMLL15R_JEHU'
+				END			
+			ELSE
+			BEGIN
+				SET @COUPON_CODE = 'BARUNSONAMLL5R_JEHU'
+			END
+		END
+	END
+
+	
+	IF @COMPANY_SEQ IN (5010, 5569, 5570, 5678, 6627, 6628, 7564, 8099) BEGIN  -- 삼성결혼도움방 , 삼성카드오픈웨딩, 신한패밀리임직원, 소노캄
+
+		IF @CARDBRAND <> 'D' 
+		BEGIN -- 디얼디어 제외
+			SET @COUPON_CODE = 'BARUNSONAMLL17R_JEHU'
+		END
+		ELSE -- 디얼디어 
+		BEGIN		
+			IF @COMPANY_SEQ IN (5010, 5569, 5570, 5678)  --삼성결혼도움방		
+			BEGIN 
+				SET @COUPON_CODE = 'BARUNSONAMLL15R_JEHU'	
+			END 
+			ELSE 
+			BEGIN 		
+				SET @COUPON_CODE = 'BARUNSONAMLL10R_JEHU'			
+			END 		
+		END
+	END 
+
+	IF @COUPON_CODE <> 'N'
+	BEGIN
+			
+		SELECT @CouponCNT = COUNT(coupon_code) 
+			FROM S4_MYCOUPON 
+			WHERE COUPON_CODE = @COUPON_CODE AND UID = @UID
+		
+		-- 쿠폰발급
+		IF 	@CouponCNT = 0
+		BEGIN
+			INSERT INTO S4_MYCOUPON (COUPON_CODE, UID, COMPANY_SEQ, ISMYYN, END_DATE)
+			SELECT COUPON_CODE
+				 , @UID
+				 , COMPANY_SEQ
+				 , 'Y'
+				 , convert(varchar(10), DATEADD(MM,3,GETDATE()), 23)
+			  FROM S4_COUPON
+			 WHERE COUPON_CODE = @COUPON_CODE
+		END
+	END
+	
+END
+
+
+
+
+GO

@@ -1,0 +1,19 @@
+IF OBJECT_ID (N'dbo.VW_COUPONTYPE_ORDER_AMT', N'V') IS NOT NULL DROP View dbo.VW_COUPONTYPE_ORDER_AMT
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE VIEW [dbo].[VW_COUPONTYPE_ORDER_AMT]
+AS
+SELECT CM.Coupon_Type_Code 
+	, COC.Order_Seq
+    , SUM(COC.COUPON_AMT) AS COUPON_AMT
+FROM Custom_Order_Coupon AS COC
+INNER JOIN    Coupon_Issue AS CI ON COC.Coupon_Issue_Seq = CI.Coupon_Issue_Seq
+INNER JOIN    Coupon_Detail AS CD ON CI.Coupon_Detail_Seq = CD.Coupon_Detail_Seq
+INNER JOIN    Coupon_MST AS CM ON CD.Coupon_MST_Seq = CM.Coupon_MST_Seq
+GROUP BY CM.Coupon_Type_Code,COC.ORDER_SEQ
+GO

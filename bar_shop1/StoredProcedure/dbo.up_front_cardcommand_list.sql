@@ -1,0 +1,51 @@
+IF OBJECT_ID (N'dbo.up_front_cardcommand_list', N'P') IS NOT NULL DROP PROCEDURE dbo.up_front_cardcommand_list
+GO
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+/*
+	작성정보   : [2003:07:22    12:35]  JJH: 
+	관련페이지 : wedd_det.asp
+	내용	   : 상품별 이용후기 (page 기능이 포함되어 있다)
+	
+	수정정보   : 
+*/
+CREATE  Procedure [dbo].[up_front_cardcommand_list]
+	@CARD_SEQ	int
+,	@PAGE_COUNT	int	=1 	-- 보고 있는페이지
+,	@PAGE_ROW	int	= 10	-- 페이지 하다당 출력row
+as
+SET NOCOUNT ON
+	
+CREATE TABLE  #TEMP_TABLE
+(
+	IID		INT	 IDENTITY(1,1)
+,	CMT_SEQ	INT
+,	REGDATE	DATETIME
+,	MEMBER_NAME	VARCHAR(100)
+,	TITLE		VARCHAR(255)
+,	COMMENT	VARCHAR(255)
+,	SCORE		INT
+)
+DECLARE	@TOTAL_COUNT 		INT
+		,@END_NUM		INT
+		,@START_NUM		INT
+INSERT INTO #TEMP_TABLE(REGDATE,CMT_SEQ,MEMBER_NAME,TITLE,COMMENT,SCORE)
+SELECT   CC.REGDATE
+	,CC.CMT_SEQ
+	,CC.MEMBER_NAME
+	,CC.TITLE
+	,CC.COMMENT
+	,CC.SCORE
+	-- FROM Ewedd_After_Note CC WHERE CC.CARD_SEQ = @CARD_SEQ
+	 FROM Ewedd_After_Note CC
+					ORDER BY CC.REGDATE DESC
+	SET @TOTAL_COUNT 	= @@ROWCOUNT
+	SET @END_NUM		= @PAGE_COUNT*@PAGE_ROW
+	SET @START_NUM	= @END_NUM-@PAGE_ROW - 1
+SELECT TT.* 
+	, CONVERT(varchar(10),TT.REGDATE,120) as REG_DT
+	,  CAST(@TOTAL_COUNT/@PAGE_ROW as INT) + 1  as TOTAL_PAGE_COUNT  FROM #temp_table TT WHERE  TT.IID BETWEEN @START_NUM AND @END_NUM
+GO

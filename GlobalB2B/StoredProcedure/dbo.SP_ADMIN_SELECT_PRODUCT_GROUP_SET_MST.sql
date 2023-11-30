@@ -1,0 +1,338 @@
+IF OBJECT_ID (N'dbo.SP_ADMIN_SELECT_PRODUCT_GROUP_SET_MST', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_ADMIN_SELECT_PRODUCT_GROUP_SET_MST
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- =============================================
+-- Author:		<Author,,Name>
+-- Create date: <Create Date,,>
+-- Description:	<Description,,>
+-- =============================================
+CREATE PROCEDURE [dbo].[SP_ADMIN_SELECT_PRODUCT_GROUP_SET_MST]
+	@p_type_code char(6),
+	@p_current_page int,
+	@p_page_row_size int,
+	@p_search_type nvarchar(20),
+	@p_search_value nvarchar(100),
+	@r_total_count int output
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    DECLARE @t_page_num int;
+    DECLARE @temp_table table
+    (
+		GROUP_CODE nvarchar(255),
+		PROD_CODE_LIST nvarchar(255),
+		PROD_TITLE_LIST nvarchar(500),
+		PROD_SEQ_LIST nvarchar(255),
+		COLOR_CODE_LIST nvarchar(255),
+		RGB_VALUE_LIST nvarchar(255),
+		CATEGORY_CODE_LIST nvarchar(255),
+		CATEGORY_NAME_LIST nvarchar(255),
+		KIND_CODE_LIST nvarchar(255),
+		KIND_NAME_LIST nvarchar(255),
+		PRICE_TERM_CODE_LIST nvarchar(255),
+		PRICE_TERM_NAME_LIST nvarchar(255),
+		PRINT_CODE_LIST nvarchar(255),
+		PRINT_NAME_LIST nvarchar(255),
+		SIZE_CODE_LIST nvarchar(255),
+		SIZE_NAME_LIST nvarchar(255)
+	)
+	
+	INSERT INTO @temp_table(
+		GROUP_CODE,
+		PROD_CODE_LIST,
+		PROD_TITLE_LIST,
+		PROD_SEQ_LIST,
+		COLOR_CODE_LIST,
+		RGB_VALUE_LIST,
+		CATEGORY_CODE_LIST,
+		CATEGORY_NAME_LIST,
+		KIND_CODE_LIST,
+		KIND_NAME_LIST,
+		PRICE_TERM_CODE_LIST,
+		PRICE_TERM_NAME_LIST,
+		PRINT_CODE_LIST,
+		PRINT_NAME_LIST,
+		SIZE_CODE_LIST,
+		SIZE_NAME_LIST
+	)
+	SELECT 
+		MST.GROUP_CODE,
+		MST.PROD_CODE_LIST,
+		MST.PROD_TITLE_LIST,
+		MST.PROD_SEQ_LIST,
+		MST.COLOR_CODE_LIST,
+		MST.RGB_VALUE_LIST,
+		MST.CATEGORY_CODE_LIST,
+		MST.CATEGORY_NAME_LIST,
+		MST.KIND_CODE_LIST,
+		MST.KIND_NAME_LIST,
+		MST.PRICE_TERM_CODE_LIST,
+		MST.PRICE_TERM_NAME_LIST,
+		MST.PRINT_CODE_LIST,
+		MST.PRINT_NAME_LIST,
+		MST.SIZE_CODE_LIST,
+		MST.SIZE_NAME_LIST
+	FROM
+	(
+		SELECT 
+			PG.GROUP_CODE
+			,
+			(
+				SUBSTRING( 
+				 (
+				  SELECT ( ', ' + IPM.PROD_CODE)
+				  FROM PROD_GROUP IPG
+				  LEFT JOIN PROD_MST IPM ON IPG.PROD_SEQ = IPM.PROD_SEQ
+				  WHERE GROUP_CODE = PG.GROUP_CODE
+				  AND IPM.USE_YORN != 'N'
+				  FOR XML PATH('')
+				 ), 3, 1000) 
+			) AS PROD_TITLE_LIST
+			,
+			(
+				SUBSTRING( 
+				 (
+				  SELECT ( ', ' + IPM.PROD_TITLE)
+				  FROM PROD_GROUP IPG
+				  LEFT JOIN PROD_MST IPM ON IPG.PROD_SEQ = IPM.PROD_SEQ
+				  WHERE GROUP_CODE = PG.GROUP_CODE
+				  AND IPM.USE_YORN != 'N'
+				  FOR XML PATH('')
+				 ), 3, 1000) 
+			) AS PROD_CODE_LIST
+			,
+			(
+				SUBSTRING( 
+				 (
+				  SELECT ( ', ' + convert(varchar,IPM.PROD_SEQ))
+				  FROM PROD_GROUP IPG
+				  LEFT JOIN PROD_MST IPM ON IPG.PROD_SEQ = IPM.PROD_SEQ
+				  WHERE GROUP_CODE = PG.GROUP_CODE
+				  AND IPM.USE_YORN != 'N'
+				  FOR XML PATH('')
+				 ), 3, 1000) 
+			) AS PROD_SEQ_LIST
+			,
+			(
+				SUBSTRING( 
+				 (
+				  SELECT ( ', ' + IPM.COLOR_TYPE_CODE)
+				  FROM PROD_GROUP IPG
+				  LEFT JOIN PROD_MST IPM ON IPG.PROD_SEQ = IPM.PROD_SEQ
+				  WHERE GROUP_CODE = PG.GROUP_CODE
+				  AND IPM.USE_YORN != 'N'
+				  FOR XML PATH('')
+				 ), 3, 1000) 
+			) AS COLOR_CODE_LIST
+			,
+			(
+				SUBSTRING( 
+				 (
+				  SELECT ( ', ' + COLOR_CC.DTL_DESC)
+				  FROM PROD_GROUP IPG
+				  LEFT JOIN PROD_MST IPM ON IPG.PROD_SEQ = IPM.PROD_SEQ
+				  LEFT JOIN COMMON_CODE COLOR_CC ON COLOR_CC.CMMN_CODE = IPM.COLOR_TYPE_CODE
+				  WHERE GROUP_CODE = PG.GROUP_CODE
+				  AND IPM.USE_YORN != 'N'
+				  FOR XML PATH('')
+				 ), 3, 1000) 
+			) AS RGB_VALUE_LIST
+			,
+			(
+				SUBSTRING( 
+				 (
+				  SELECT ( ', ' + CATEGORY_CC.CMMN_CODE)
+				  FROM PROD_GROUP IPG
+				  LEFT JOIN PROD_MST IPM ON IPG.PROD_SEQ = IPM.PROD_SEQ
+				  LEFT JOIN COMMON_CODE CATEGORY_CC ON CATEGORY_CC.CMMN_CODE = IPM.CATEGORY_TYPE_CODE
+				  WHERE GROUP_CODE = PG.GROUP_CODE
+				  AND IPM.USE_YORN != 'N'
+				  FOR XML PATH('')
+				 ), 3, 1000) 
+			) AS CATEGORY_CODE_LIST
+			,
+			(
+				SUBSTRING( 
+				 (
+				  SELECT ( ', ' + CATEGORY_CC.DTL_NAME)
+				  FROM PROD_GROUP IPG
+				  LEFT JOIN PROD_MST IPM ON IPG.PROD_SEQ = IPM.PROD_SEQ
+				  LEFT JOIN COMMON_CODE CATEGORY_CC ON CATEGORY_CC.CMMN_CODE = IPM.CATEGORY_TYPE_CODE
+				  WHERE GROUP_CODE = PG.GROUP_CODE
+				  AND IPM.USE_YORN != 'N'
+				  FOR XML PATH('')
+				 ), 3, 1000) 
+			) AS CATEGORY_NAME_LIST
+			,
+			(
+				SUBSTRING( 
+				 (
+				  SELECT ( ', ' + KIND_CC.CMMN_CODE)
+				  FROM PROD_GROUP IPG
+				  LEFT JOIN PROD_MST IPM ON IPG.PROD_SEQ = IPM.PROD_SEQ
+				  LEFT JOIN COMMON_CODE KIND_CC ON KIND_CC.CMMN_CODE = IPM.KIND_CODE
+				  WHERE GROUP_CODE = PG.GROUP_CODE
+				  AND IPM.USE_YORN != 'N'
+				  FOR XML PATH('')
+				 ), 3, 1000) 
+			) AS KIND_CODE_LIST
+			,
+			(
+				SUBSTRING( 
+				 (
+				  SELECT ( ', ' + KIND_CC.DTL_NAME)
+				  FROM PROD_GROUP IPG
+				  LEFT JOIN PROD_MST IPM ON IPG.PROD_SEQ = IPM.PROD_SEQ
+				  LEFT JOIN COMMON_CODE KIND_CC ON KIND_CC.CMMN_CODE = IPM.KIND_CODE
+				  WHERE GROUP_CODE = PG.GROUP_CODE
+				  AND IPM.USE_YORN != 'N'
+				  FOR XML PATH('')
+				 ), 3, 1000) 
+			) AS KIND_NAME_LIST
+			,
+			(
+				SUBSTRING( 
+				 (
+				  SELECT ( ', ' + PRICETERM_CC.CMMN_CODE)
+				  FROM PROD_GROUP IPG
+				  LEFT JOIN PROD_MST IPM ON IPG.PROD_SEQ = IPM.PROD_SEQ
+				  LEFT JOIN COMMON_CODE PRICETERM_CC ON PRICETERM_CC.CMMN_CODE = IPM.PRICE_TERM_TYPE_CODE
+				  WHERE GROUP_CODE = PG.GROUP_CODE
+				  AND IPM.USE_YORN != 'N'
+				  FOR XML PATH('')
+				 ), 3, 1000) 
+			) AS PRICE_TERM_CODE_LIST
+			,
+			(
+				SUBSTRING( 
+				 (
+				  SELECT ( ', ' + PRICETERM_CC.DTL_NAME)
+				  FROM PROD_GROUP IPG
+				  LEFT JOIN PROD_MST IPM ON IPG.PROD_SEQ = IPM.PROD_SEQ
+				  LEFT JOIN COMMON_CODE PRICETERM_CC ON PRICETERM_CC.CMMN_CODE = IPM.PRICE_TERM_TYPE_CODE
+				  WHERE GROUP_CODE = PG.GROUP_CODE
+				  AND IPM.USE_YORN != 'N'
+				  FOR XML PATH('')
+				 ), 3, 1000) 
+			) AS PRICE_TERM_NAME_LIST
+			,
+			(
+				SUBSTRING( 
+				 (
+				  SELECT ( ', ' + PRINT_CC.CMMN_CODE)
+				  FROM PROD_GROUP IPG
+				  LEFT JOIN PROD_MST IPM ON IPG.PROD_SEQ = IPM.PROD_SEQ
+				  LEFT JOIN COMMON_CODE PRINT_CC ON PRINT_CC.CMMN_CODE = IPM.PRINT_TYPE_CODE
+				  WHERE GROUP_CODE = PG.GROUP_CODE
+				  AND IPM.USE_YORN != 'N'
+				  FOR XML PATH('')
+				 ), 3, 1000) 
+			) AS PRINT_CODE_LIST
+			,
+			(
+				SUBSTRING( 
+				 (
+				  SELECT ( ', ' + PRINT_CC.DTL_NAME)
+				  FROM PROD_GROUP IPG
+				  LEFT JOIN PROD_MST IPM ON IPG.PROD_SEQ = IPM.PROD_SEQ
+				  LEFT JOIN COMMON_CODE PRINT_CC ON PRINT_CC.CMMN_CODE = IPM.PRINT_TYPE_CODE
+				  WHERE GROUP_CODE = PG.GROUP_CODE
+				  AND IPM.USE_YORN != 'N'
+				  FOR XML PATH('')
+				 ), 3, 1000) 
+			) AS PRINT_NAME_LIST
+			,
+			(
+				SUBSTRING( 
+				 (
+				  SELECT ( ', ' + SIZE_CC.CMMN_CODE)
+				  FROM PROD_GROUP IPG
+				  LEFT JOIN PROD_MST IPM ON IPG.PROD_SEQ = IPM.PROD_SEQ
+				  LEFT JOIN COMMON_CODE SIZE_CC ON SIZE_CC.CMMN_CODE = IPM.PROD_SIZE_TYPE_CODE
+				  WHERE GROUP_CODE = PG.GROUP_CODE
+				  AND IPM.USE_YORN != 'N'
+				  FOR XML PATH('')
+				 ), 3, 1000) 
+			) AS SIZE_CODE_LIST
+			,
+			(
+				SUBSTRING( 
+				 (
+				  SELECT ( ', ' + SIZE_CC.DTL_NAME)
+				  FROM PROD_GROUP IPG
+				  LEFT JOIN PROD_MST IPM ON IPG.PROD_SEQ = IPM.PROD_SEQ
+				  LEFT JOIN COMMON_CODE SIZE_CC ON SIZE_CC.CMMN_CODE = IPM.PROD_SIZE_TYPE_CODE
+				  WHERE GROUP_CODE = PG.GROUP_CODE
+				  AND IPM.USE_YORN != 'N'
+				  FOR XML PATH('')
+				 ), 3, 1000) 
+			) AS SIZE_NAME_LIST
+			FROM
+			PROD_GROUP PG
+			LEFT JOIN PROD_MST PM ON PG.PROD_SEQ = PM.PROD_SEQ
+			WHERE PM.USE_YORN != 'N' AND PG.TYPE_CODE = @p_type_code
+			GROUP BY PG.GROUP_CODE
+	)MST
+
+    IF(@p_search_type IS NULL)
+		SET @p_search_type = 'title';
+	
+	IF(@p_search_value IS NULL)
+		SET @p_search_value = '';
+
+	SET @p_search_type = LOWER(@p_search_type);	
+	SET @p_search_value = '%' + @p_search_value + '%';
+    
+    SET @t_page_num = (@p_current_page - 1) *  @p_page_row_size;
+    
+    SET @r_total_count = (SELECT COUNT(*) FROM @temp_table TMST
+							WHERE 
+							(
+								CASE @p_search_type
+								WHEN 'prodCode' THEN TMST.PROD_CODE_LIST
+								WHEN 'title' THEN TMST.PROD_TITLE_LIST
+								WHEN 'prodSeq' THEN TMST.PROD_SEQ_LIST
+								WHEN 'code' THEN TMST.GROUP_CODE
+								ELSE TMST.PROD_CODE_LIST END
+							) LIKE @p_search_value
+						)
+	
+	SELECT TOP(@p_page_row_size)
+	*
+	FROM
+	@temp_table TMST
+	WHERE TMST.GROUP_CODE NOT IN
+	(
+		SELECT TOP(@t_page_num)
+		ITMST.GROUP_CODE
+		FROM @temp_table ITMST
+		WHERE (
+			CASE @p_search_type
+			WHEN 'prodCode' THEN ITMST.PROD_CODE_LIST
+			WHEN 'title' THEN TMST.PROD_TITLE_LIST
+			WHEN 'prodSeq' THEN ITMST.PROD_SEQ_LIST
+			WHEN 'code' THEN ITMST.GROUP_CODE
+			ELSE PROD_CODE_LIST END
+		) LIKE @p_search_value
+		ORDER BY ITMST.GROUP_CODE DESC
+	)
+	AND
+	(
+		CASE @p_search_type
+		WHEN 'prodCode' THEN TMST.PROD_CODE_LIST
+		WHEN 'title' THEN TMST.PROD_TITLE_LIST
+		WHEN 'prodSeq' THEN TMST.PROD_SEQ_LIST
+		WHEN 'code' THEN TMST.GROUP_CODE
+		ELSE TMST.PROD_CODE_LIST END
+	) LIKE @p_search_value
+	ORDER BY TMST.GROUP_CODE DESC
+    
+END
+GO

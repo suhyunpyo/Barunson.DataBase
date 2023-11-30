@@ -1,0 +1,167 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+/***************************************************************  
+작성자 : 표수현  
+작성일 : 2020-02-15  
+DESCRIPTION : 결재 완료시 SMS 보내기   
+SPECIAL LOGIC : SP_T_SEND_ORDER_BIZTALK 'M2108190002'    
+******************************************************************  
+MODIFICATION  
+******************************************************************  
+수정일           작업자                DESCRIPTION  
+==================================================================  
+2023-10-18		김광호				무료결제도 알림톡 발송
+******************************************************************/  
+
+ALTER PROCEDURE [dbo].[SP_T_SEND_ORDER_BIZTALK]   
+	@ORDER_CDOE VARCHAR(25),  
+	@ORDER_PATH nvarchar(100) -- PC / MOBILE
+AS    
+BEGIN  
+ 
+	DECLARE @COMPANY_SEQ INT     
+  
+	DECLARE @CONTENT VARCHAR(800)   
+	DECLARE @TEMPLATE_CODE VARCHAR(30)  
+	DECLARE @SENDER_KEY VARCHAR(40)  
+	DECLARE @MSG_TYPE INT   
+	DECLARE @KKO_BTN_TYPE CHAR(1)  
+	DECLARE @KKO_BTN_INFO VARCHAR(4000)  
+	DECLARE @CALLBACK VARCHAR(15)  
+	DECLARE @LMS_SUBJECT VARCHAR(200)  
+	DECLARE @SALES_GUBUN  VARCHAR(2) = 'BM'  
+	DECLARE @DIV VARCHAR(20) = '결제완료'  
+  
+	DECLARE @CARD_NAME VARCHAR(20)    
+	DECLARE @BANK_NAME VARCHAR(200)    
+	DECLARE @BANK_ACCOUNT VARCHAR(100)   
+	DECLARE @SETTLE_METHOD_CODE VARCHAR(10)    
+	DECLARE @SETTLE_PRICE INT     
+	DECLARE @ORDER_SEQ INT  
+	DECLARE @ORDER_NAME NVARCHAR(100)  
+	DECLARE @ORDER_HPHONE VARCHAR(20)    
+	DECLARE @PAYMENT_STATUS_CODE VARCHAR(50)     
+  
+	-- 결제정보  
+	SELECT	@CARD_NAME = F.PRODUCT_NAME,  
+			@ORDER_SEQ = A.ORDER_ID ,   
+			@ORDER_NAME = A.[NAME],  
+			@SETTLE_PRICE = ISNULL(A.PAYMENT_PRICE, 0),  
+			@ORDER_HPHONE = A.CELLPHONE_NUMBER,  
+			@SETTLE_METHOD_CODE   = A.PAYMENT_METHOD_CODE,  
+			@PAYMENT_STATUS_CODE = A.PAYMENT_STATUS_CODE,  
+			@BANK_NAME = A.FINANCE_NAME,  
+			@BANK_ACCOUNT = A.ACCOUNT_NUMBER  
+	FROM	DBO.TB_ORDER A 
+		INNER JOIN DBO.TB_ORDER_PRODUCT E ON A.ORDER_ID = E.ORDER_ID  
+		INNER JOIN DBO.TB_PRODUCT F ON E.PRODUCT_ID = F.PRODUCT_ID  
+	WHERE	A.ORDER_CODE = @ORDER_CDOE  
+  
+	IF @@ROWCOUNT > 0 
+	  BEGIN
+   
+		IF @SETTLE_METHOD_CODE = 'PMC02' --무통장입금(가상계좌)
+		  BEGIN
+			IF @PAYMENT_STATUS_CODE = 'PSC02'  --결제완료
+			  BEGIN 
+				SET @DIV = '결제완료' 
+				
+				UPDATE	TB_ORDER
+				SET		PAYMENT_PATH = @ORDER_PATH
+				WHERE	ORDER_CODE = @ORDER_CDOE
+
+			  END 
+			ELSE 
+			  BEGIN   
+				SET @DIV = '무통장결제요청'  
+
+				UPDATE	TB_ORDER
+				SET		ORDER_PATH = @ORDER_PATH
+				WHERE	ORDER_CODE = @ORDER_CDOE
+
+			END 
+		  END 
+		ELSE 
+		  BEGIN   
+			SET @DIV = '결제완료'  
+
+			UPDATE	TB_ORDER
+			SET		ORDER_PATH = @ORDER_PATH,
+					PAYMENT_PATH = @ORDER_PATH
+			WHERE ORDER_CODE = @ORDER_CDOE
+
+		  END   
+  
+		-- 알림톡 컨텐츠 가져오기  
+		SELECT	@CONTENT = CONTENT ,   
+				@MSG_TYPE = MSG_TYPE,  
+				@SENDER_KEY = SENDER_KEY,  
+				@TEMPLATE_CODE = TEMPLATE_CODE,  
+				@KKO_BTN_TYPE = KKO_BTN_TYPE,  
+				@KKO_BTN_INFO = KKO_BTN_INFO,  
+				@CALLBACK = CALLBACK,  
+				@LMS_SUBJECT = LMS_SUBJECT,  
+				@COMPANY_SEQ = COMPANY_SEQ  
+		FROM	BAR_SHOP1.DBO.WEDD_BIZTALK      
+		WHERE   SALES_GUBUN = @SALES_GUBUN 
+		AND		DIV = @DIV 
+		AND		USE_YORN = 'Y'    
+		IF @@ROWCOUNT > 0 
+		  BEGIN
+			IF CHARINDEX('#{NAME}',@CONTENT) > 0   
+			BEGIN    
+				SET @CONTENT = REPLACE(@CONTENT, '#{NAME}', @ORDER_NAME)  
+			END  
+  
+			IF CHARINDEX('#{0000000}',@CONTENT) > 0  
+			BEGIN  
+				SET @CONTENT = REPLACE(@CONTENT, '#{0000000}', @ORDER_CDOE)  
+			END  
+  
+			IF CHARINDEX('#{상품명}',@CONTENT) > 0 
+			BEGIN  
+				SET @CONTENT = REPLACE(@CONTENT, '#{상품명}', @CARD_NAME)  
+			END  
+   
+			IF CHARINDEX('#{입금은행명}',@CONTENT) > 0 
+			BEGIN  
+				 SET @CONTENT = REPLACE(@CONTENT, '#{입금은행명}', @BANK_NAME)  
+			END  
+  
+			IF CHARINDEX('#{가상계좌번호}',@CONTENT) > 0 
+			BEGIN  
+				SET @CONTENT = REPLACE(@CONTENT, '#{가상계좌번호}', @BANK_ACCOUNT)  
+			END  
+  
+			IF CHARINDEX('#{입금금액}',@CONTENT) > 0 
+			BEGIN  
+				SET @CONTENT = REPLACE(@CONTENT, '#{입금금액}', @SETTLE_PRICE )  
+			END  
+  
+			IF CHARINDEX('#{금액}',@CONTENT) > 0 
+			BEGIN  
+				SET @CONTENT = REPLACE(@CONTENT, '#{금액}', @SETTLE_PRICE)   
+			END  
+			--비즈톡 발송
+			INSERT INTO BAR_SHOP1.DBO.ATA_MMT_TRAN   
+			(  
+			   DATE_CLIENT_REQ, [SUBJECT], CONTENT, CALLBACK, MSG_STATUS, RECIPIENT_NUM, MSG_TYPE,     
+			   SENDER_KEY, TEMPLATE_CODE, KKO_BTN_TYPE, KKO_BTN_INFO,   
+			   ETC_TEXT_1,-- SALES_GUBUN  
+			   ETC_TEXT_2, -- 호출프로시저  
+			   ETC_NUM_1 -- COMPANY_SEQ   
+			)   
+			VALUES   
+			(  
+			   GETDATE(), @LMS_SUBJECT, @CONTENT, @CALLBACK, '1', @ORDER_HPHONE, @MSG_TYPE,  
+			   @SENDER_KEY, @TEMPLATE_CODE, @KKO_BTN_TYPE, @KKO_BTN_INFO,   
+			   @SALES_GUBUN,     
+			   'BARUNSON.DBO.SP_T_SEND_ORDER_BIZTALK',  
+			   @COMPANY_SEQ   
+			)  
+		  End
+	  End
+END  
+GO

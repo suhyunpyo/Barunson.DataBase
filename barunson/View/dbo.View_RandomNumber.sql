@@ -1,0 +1,11 @@
+IF OBJECT_ID (N'dbo.View_RandomNumber', N'V') IS NOT NULL DROP View dbo.View_RandomNumber
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE VIEW [dbo].[View_RandomNumber]
+AS
+    SELECT RAND() AS RANDOMNUMBER
+GO

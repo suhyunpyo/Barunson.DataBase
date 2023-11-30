@@ -1,0 +1,71 @@
+IF OBJECT_ID (N'dbo.SP_T_WEDDINGMAGAZINE_CLICK', N'P') IS NOT NULL DROP PROCEDURE dbo.SP_T_WEDDINGMAGAZINE_CLICK
+GO
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [dbo].[SP_T_WEDDINGMAGAZINE_CLICK]
+/***************************************************************
+작성자	:	표수현
+작성일	:	2023-02-21
+DESCRIPTION	:	웨딩매거진 날짜별 , PC 모바일별 클릭수 저장
+SPECIAL LOGIC	:
+******************************************************************
+MODIFICATION
+******************************************************************
+수정일           작업자                DESCRIPTION
+==================================================================
+******************************************************************/
+ @SEQ INT = NULL,
+ @GUBUN CHAR(1) = NULL
+AS
+
+ SET NOCOUNT ON
+ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED 
+ 
+ BEGIN
+	
+	IF @GUBUN = 'P' BEGIN 
+
+		UPDATE WEDDINGMAGAZINE 
+		SET VIEW_CNT = (VIEW_CNT + 1) 
+		WHERE SEQ = @SEQ
+
+	END ELSE BEGIN 
+
+		UPDATE WEDDINGMAGAZINE 
+		SET MO_VIEW_CNT = ISNULL(MO_VIEW_CNT,0) + 1
+		WHERE SEQ = @SEQ
+
+	END 
+	
+
+	INSERT  WEDDINGMAGAZINE_CLICK_STATISTICS(GUBUN, CLICK, REG_DATE, BOARD_NUM)
+	VALUES (@GUBUN, 1, GETDATE(), @SEQ)
+
+	--DECLARE @번호 INT = 0
+
+	--SELECT @번호 = BOARD_NUM 
+	--FROM WEDDINGMAGAZINE_CLICK_STATISTICS
+	--WHERE BOARD_NUM = @SEQ AND GUBUN = @GUBUN
+
+	--IF @번호 > 0 BEGIN 
+
+	--		UPDATE WEDDINGMAGAZINE_CLICK_STATISTICS
+	--		SET CLICK = CLICK + 1
+	--		WHERE BOARD_NUM = @SEQ AND GUBUN = @GUBUN
+
+	--END ELSE BEGIN
+		
+	--		INSERT  WEDDINGMAGAZINE_CLICK_STATISTICS(GUBUN, CLICK, REG_DATE, BOARD_NUM)
+	--		VALUES (@GUBUN, 1, GETDATE(), @SEQ)
+
+	--END 
+
+ END 
+
+
+
+
+GO
